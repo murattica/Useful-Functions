@@ -1,0 +1,63 @@
+-- This procedure takes the following information:
+	-- input_table_name: base table of population. Consists entities (e.g. uer_id's, target information in 0/1 format)
+	-- neg_pos_ratio:    Ratio of negatives to positives in the oversampled base.
+	-- sample_size_cnt:  Size of the oversampled base.
+	-- suffix: 	    Suffix for creating the oversampled base table name.
+
+
+CREATE OR REPLACE PROCEDURE `fiona-s-farm.ace.oversample`(input_table_name STRING, neg_pos_ratio NUMERIC, sample_size_cnt INT64, suffix STRING)
+BEGIN
+
+    declare pos_cnt int64;
+    declare neg_cnt int64;
+    declare nec_pos_cnt NUMERIC;
+    declare nec_neg_cnt NUMERIC; 
+    declare final_pos_cnt NUMERIC;
+    declare final_neg_cnt NUMERIC;
+    declare pos_cutoff NUMERIC;
+    declare neg_cutoff NUMERIC;
+
+    EXECUTE IMMEDIATE CONCAT("CREATE or replace TABLE model_variables.target_cnts ", 
+    "OPTIONS( ",
+    "expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) ",
+    ") AS ",
+    "select sum(case when target = 1 then 1 else 0 end) as pos_cnt, ",
+    "sum(case when target = 0 then 1 else 0 end) as neg_cnt, ",
+    "from " || input_table_name  );
+
+    set pos_cnt = (select pos_cnt from model_variables.target_cnts  );
+    set neg_cnt = (select neg_cnt from model_variables.target_cnts  );
+    set nec_pos_cnt = sample_size_cnt / (neg_pos_ratio+1);
+    set nec_neg_cnt = nec_pos_cnt * neg_pos_ratio ;
+
+
+
+    --SET number of positives based on input sample count and neg/pos ratio.
+
+    CASE
+        WHEN nec_pos_cnt <= pos_cnt and neg_cnt < nec_neg_cnt                                           -- when there are enough pos but not enough neg
+            THEN set final_pos_cnt = neg_cnt / neg_pos_ratio;
+        WHEN nec_pos_cnt <= pos_cnt and nec_neg_cnt <= neg_cnt                                          -- when there are enough of both pos and neg
+            THEN set final_pos_cnt =  nec_pos_cnt;
+        WHEN pos_cnt < nec_pos_cnt and neg_cnt < nec_neg_cnt and neg_cnt > pos_cnt * neg_pos_ratio      -- when there are not enough sample of both pos and neg. enough neg for all positives. take all positives
+            THEN set final_pos_cnt =  pos_cnt;
+        WHEN pos_cnt < nec_pos_cnt and neg_cnt < nec_neg_cnt and neg_cnt < pos_cnt * neg_pos_ratio      -- when there are not enough sample of both pos and neg. take enough pos for all negs.
+            THEN set final_pos_cnt =  neg_cnt/neg_pos_ratio;
+        WHEN pos_cnt < nec_pos_cnt and nec_neg_cnt <= neg_cnt                                           -- when there are enough neg but not enough pos. take all pos and enough negatives.
+            THEN set final_pos_cnt =  pos_cnt;
+    END CASE;
+
+    set final_neg_cnt = final_pos_cnt * neg_pos_ratio;                                                  -- SET number of negatives in the sample
+
+
+    set pos_cutoff = final_pos_cnt / pos_cnt;
+    set neg_cutoff = final_neg_cnt / neg_cnt;
+
+    EXECUTE IMMEDIATE CONCAT("create or replace table   model_variables.model_sampled_base" || suffix || " as ", 
+    "select user_id, target from ", 
+    "(",
+    "select * from (select t.*,  case when rand() <= " ||  pos_cutoff  || " then 1 else 0 end as is_sampled from " || input_table_name || " t where target = 1) where is_sampled = 1 union all ",
+    "select * from (select t.*,  case when rand() <= " ||  neg_cutoff  || " then 1 else 0 end as is_sampled from " || input_table_name || " t where target = 0) where is_sampled = 1",
+    ")");
+    
+END;

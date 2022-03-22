@@ -1,0 +1,18 @@
+-- This function parse CSV values and converts them into bigquery fields.
+-- Function utilizes getCsvColumnIndex function.
+
+
+CREATE OR REPLACE FUNCTION `data_source.schema.getCsvByColKey`(csv STRING, key STRING) AS (
+(
+    select res from 
+        (
+            select dum, ARRAY_AGG(res ORDER BY res)  as res from 
+                (
+                    select 'dum' dum, split(test,',')[SAFE_OFFSET (`data_source.schema.getCsvColumnIndex`(csv, key))] res from 
+                    (
+                        select split(csv, '\n') as test), unnest(test) as test
+                            where instr( test , key) = 0) 
+                            group by dum
+        )
+    )
+);

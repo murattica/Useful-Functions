@@ -1,0 +1,3 @@
+CREATE OR REPLACE FUNCTION `data_source.schema.getCsvColumnIndex`(csv STRING, key STRING) RETURNS INT64 AS (
+(select offset from unnest(split(split(csv, '\n')[SAFE_OFFSET(0)], ',')) x with offset where x = key)
+);
