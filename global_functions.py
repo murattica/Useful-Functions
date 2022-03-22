@@ -95,7 +95,7 @@ def task_fail_slack_alert(context):
 
 def post_message_to_slack(text):
     return requests.post('https://slack.com/api/chat.postMessage', {
-        'token': 'xoxb-603265646480-3173018663442-CpnF6FxiJOepOojX9GQvGkDC',
+        'token': ****
         'channel': '#data-team-errors',
         'text': text,
     }).json()
