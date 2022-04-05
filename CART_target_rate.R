@@ -32,8 +32,8 @@ bq_auth(path = "/home/data/ssh-key.json")
 projectid<-'project_id'
 datasetid<-'id'
 bq_conn <-  dbConnect(bigquery(), 
-                      project = "fiona-s-farm",
-                      dataset = "model_variables", 
+                      project = "project_id",
+                      dataset = "dataset", 
                       use_legacy_sql = FALSE
 )
 
@@ -42,8 +42,8 @@ tb = bq_project_query("fiona-s-farm", "select
 t1.user_id,
 t1.is_d1 as target,
 coalesce(t2.max_lvl_d0,0) as max_lvl_d0
-from Looker_db.user_summary t1
-left join `fiona-s-farm.model_variables.puzzle_variables` t2 on t1.user_id = t2.user_id")
+from project.user_summary t1
+left join `project.dataset.puzzle_variables` t2 on t1.user_id = t2.user_id")
 mdl_full <- bq_table_download(tb)
 
 targ_avg <- mean(mdl_full[["target"]])
